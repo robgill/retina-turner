@@ -73,18 +73,29 @@ iframe; bytes cross the boundary via `postMessage`. The main thread owns the
 device/preset tables and sends them to the UI on init, so the UI stays a "dumb"
 renderer of whatever data it's handed.
 
-## Develop
+## Install (from source)
+
+> [!IMPORTANT]
+> `code.js` — the plugin's compiled entry point referenced by `manifest.json` —
+> is **not** committed to the repo (it's a build artifact). After cloning you
+> **must** run the build once before Figma can import the plugin, otherwise the
+> import fails with a missing `code.js`.
 
 ```bash
 npm install
-npm run build     # bundle src/code.ts -> code.js (esbuild)
-npm run watch     # rebuild on change
-npm run typecheck # tsc --noEmit
+npm run build     # bundle src/code.ts -> code.js (esbuild) — REQUIRED before first import
 ```
 
 Then in Figma desktop: **Plugins → Development → Import plugin from manifest…**
 and pick [`manifest.json`](manifest.json). Select one or more image layers and
 run **Retina Turner**.
+
+## Develop
+
+```bash
+npm run watch     # rebuild on change
+npm run typecheck # tsc --noEmit
+```
 
 ## Status
 

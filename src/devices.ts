@@ -13,7 +13,7 @@ export const DEVICES: DevicePreset[] = [
   // ---- iPhone (newest first) ----
   {
     key: "iphone-17-pro-max",
-    name: "iPhone 17 Pro Max / 16 Pro Max",
+    name: "iPhone 18 Pro Max / 17 Pro Max / 16 Pro Max",
     pxWidth: 1320,
     pxHeight: 2868,
     ptWidth: 440,
@@ -25,7 +25,7 @@ export const DEVICES: DevicePreset[] = [
   },
   {
     key: "iphone-17",
-    name: "iPhone 17 / 17 Pro / 16 Pro",
+    name: "iPhone 18 Pro / 17 / 17 Pro / 16 Pro",
     pxWidth: 1206,
     pxHeight: 2622,
     ptWidth: 402,
