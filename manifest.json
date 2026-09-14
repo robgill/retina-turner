@@ -1,0 +1,13 @@
+{
+  "name": "Retina Turner",
+  "id": "1677663572515148459",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma", "dev"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  },
+  "capabilities": []
+}
