@@ -94,18 +94,21 @@ renderer of whatever data it's handed.
 
 > [!IMPORTANT]
 > `code.js` — the plugin's compiled entry point referenced by `manifest.json` —
-> is **not** committed to the repo (it's a build artifact). After cloning you
-> **must** run the build once before Figma can import the plugin, otherwise the
-> import fails with a missing `code.js`.
+> is **not** committed to the repo (it's a build artifact). It's built for you:
+> `npm install` runs a `prepare` script that bundles it automatically, so a
+> fresh clone is ready to import. If Figma reports a missing `code.js` (e.g.
+> after a `git pull` that changed `src/`), just run `npm run build`.
 
 ```bash
-npm install
-npm run build     # bundle src/code.ts -> code.js (esbuild) — REQUIRED before first import
+npm install       # installs deps AND builds code.js (via the prepare script)
 ```
 
 Then in Figma desktop: **Plugins → Development → Import plugin from manifest…**
 and pick [`manifest.json`](manifest.json). Select one or more image layers and
 run **Retina Turner**.
+
+After pulling changes that touch `src/`, rebuild with `npm run build` (or
+`npm run watch` while developing).
 
 ## Develop
 

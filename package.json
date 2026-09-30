@@ -6,7 +6,8 @@
   "scripts": {
     "build": "esbuild src/code.ts --bundle --target=es2017 --outfile=code.js",
     "watch": "esbuild src/code.ts --bundle --target=es2017 --outfile=code.js --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepare": "npm run build"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.100.0",
