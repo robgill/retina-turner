@@ -8,9 +8,19 @@
 import { DEVICES, deviceByKey } from "./devices";
 import { MAC_SHADOW_INSETS } from "./insets";
 import { findStatusBar, placeStatusBar } from "./statusbars";
-import { FONT_CHOICES, fontChoiceById, OUTLINES, TITLE_FONT_SIZE, TITLE_GAP } from "./styles";
 import {
+  DEFAULT_STROKE_COLOUR,
+  DEFAULT_STROKE_WIDTH,
+  FONT_CHOICES,
+  fontChoiceById,
+  OUTLINES,
+  TITLE_FONT_SIZE,
+  TITLE_GAP,
+} from "./styles";
+import {
+  DevicePreset,
   FontId,
+  FrameCandidate,
   FrameStyle,
   ImagePayload,
   MainToUI,
@@ -19,10 +29,12 @@ import {
   ProcessedItem,
   RestyleStatusBar,
   Stamp,
+  StatusBarSample,
   StyledItem,
   TabId,
   TabPrefs,
   UIToMain,
+  WindowSize,
 } from "./types";
 
 const PREFS_KEY = "retina-turner:prefs";
@@ -43,6 +55,9 @@ const DEFAULT_COMPUTER: TabPrefs = {
   font: "inter",
   fontColour: "#6b7280",
   cornerRadius: 17,
+  radiusFromDevice: false,
+  strokeWidth: DEFAULT_STROKE_WIDTH,
+  strokeColour: DEFAULT_STROKE_COLOUR,
   outline: "none",
 };
 
@@ -54,14 +69,37 @@ const DEFAULT_PHONE: TabPrefs = {
   titleOn: false,
   font: "inter",
   fontColour: "#6b7280",
-  cornerRadius: 41.5,
+  cornerRadius: 62, // fallback; the phone tab defaults to the device's own radius
+  radiusFromDevice: true,
+  strokeWidth: DEFAULT_STROKE_WIDTH,
+  strokeColour: DEFAULT_STROKE_COLOUR,
   outline: "soft",
 };
+
+// Plugin-window sizing. The window is drag-resizable (grip in the UI); Figma
+// clamps resize() to the available app area, so a tall request just fills the
+// viewport. These bounds keep it usable; height max is generous headroom.
+const WINDOW = {
+  minWidth: 360,
+  maxWidth: 800,
+  minHeight: 480,
+  maxHeight: 2000,
+  defWidth: 400,
+  defHeight: 720,
+};
+
+function clampWindow(width: number, height: number): WindowSize {
+  return {
+    width: Math.round(Math.max(WINDOW.minWidth, Math.min(WINDOW.maxWidth, width))),
+    height: Math.round(Math.max(WINDOW.minHeight, Math.min(WINDOW.maxHeight, height))),
+  };
+}
 
 const DEFAULT_PREFS: Prefs = {
   activeTab: "phone",
   computer: DEFAULT_COMPUTER,
   phone: DEFAULT_PHONE,
+  window: { width: WINDOW.defWidth, height: WINDOW.defHeight, userSized: false },
 };
 
 // ---- helpers ---------------------------------------------------------------
@@ -73,6 +111,37 @@ function hexToRgb(hex: string): RGB {
     g: parseInt(h.slice(2, 4), 16) / 255,
     b: parseInt(h.slice(4, 6), 16) / 255,
   };
+}
+
+function rgbToHex(c: RGB): string {
+  const to2 = (v: number) =>
+    Math.round(Math.max(0, Math.min(1, v)) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${to2(c.r)}${to2(c.g)}${to2(c.b)}`;
+}
+
+/** Perceived luminance (0..1) of a hex colour, for light/dark decisions. */
+function luminance(hex: string): number {
+  const { r, g, b } = hexToRgb(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Derive a status-bar colour sample from a plain frame's own background fill
+ * (used by the apply-to-any-frame path, where there's no screenshot to sample).
+ * A dark background implies light content, so mode "dark"; otherwise "light". */
+function frameStatusBarSample(frame: FrameNode): StatusBarSample {
+  let bg = "#ffffff";
+  const fills = frame.fills;
+  if (fills !== figma.mixed && Array.isArray(fills)) {
+    for (const paint of fills) {
+      if (paint.type === "SOLID" && paint.visible !== false) {
+        bg = rgbToHex(paint.color);
+        break;
+      }
+    }
+  }
+  return { bg, mode: luminance(bg) < 0.5 ? "dark" : "light" };
 }
 
 function imageHashOf(node: SceneNode): string | null {
@@ -174,23 +243,43 @@ async function collectImages(nodes: readonly SceneNode[]): Promise<ImagePayload[
   return out;
 }
 
-/** Apply the WYSIWYG frame style: corner radius + outline + shadow. */
-function applyStyle(frame: FrameNode, style: FrameStyle) {
+/** Plain frames in the selection the user can convert: not one of ours (those
+ * go down the restyle path) and not image-filled (those are the image path).
+ * Only the directly-selected frames — we don't hunt nested ones here. */
+function collectFrames(nodes: readonly SceneNode[]): FrameCandidate[] {
+  const out: FrameCandidate[] = [];
+  for (const node of nodes) {
+    if (node.type !== "FRAME") continue;
+    if (readStamp(node)) continue; // already ours → restyle
+    if (node.getPluginData(TITLE_KEY) === "1") continue; // our title-stack wrapper
+    if (imageHashOf(node)) continue; // image-filled → turn/process
+    out.push({ id: node.id, name: node.name, width: node.width, height: node.height });
+  }
+  return out;
+}
+
+/** Apply the WYSIWYG frame style: corner radius + border + drop shadow.
+ * `device` (when known) resolves a radiusFromDevice request to that device's
+ * own corner radius; otherwise the explicit style.cornerRadius is used. */
+function applyStyle(frame: FrameNode, style: FrameStyle, device?: DevicePreset) {
   // All four corners on the output frame (the top-left-only look is only the
   // dialog's radius selector chips).
-  frame.cornerRadius = style.cornerRadius;
+  frame.cornerRadius =
+    style.radiusFromDevice && device ? device.cornerRadius : style.cornerRadius;
   frame.clipsContent = true;
 
-  const outline = OUTLINES[style.outline];
-  if (outline.stroke && outline.strokeWeight) {
-    frame.strokes = [{ type: "SOLID", color: hexToRgb(outline.stroke) }];
-    frame.strokeWeight = outline.strokeWeight;
+  // Border: independent width + colour. Width 0 = no border.
+  if (style.strokeWidth > 0) {
+    frame.strokes = [{ type: "SOLID", color: hexToRgb(style.strokeColour) }];
+    frame.strokeWeight = style.strokeWidth;
     frame.strokeAlign = "OUTSIDE"; // bezel sits around the content, not over it
   } else {
     frame.strokes = [];
   }
 
-  frame.effects = outline.shadows.map((s) => ({
+  // Drop shadow: driven by the shadow preset only.
+  const shadows = (OUTLINES[style.outline] || OUTLINES.none).shadows;
+  frame.effects = shadows.map((s) => ({
     type: "DROP_SHADOW",
     color: { ...hexToRgb(s.color), a: s.opacity },
     offset: { x: s.x, y: s.y },
@@ -207,7 +296,7 @@ function buildScreenshotFrame(item: ProcessedItem, style: FrameStyle): FrameNode
   frame.resize(item.width, item.height);
   frame.name = item.title;
   frame.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: image.hash }];
-  applyStyle(frame, style);
+  applyStyle(frame, style, deviceByKey(item.deviceKey));
   return frame;
 }
 
@@ -420,8 +509,11 @@ async function restyleAll(ids: string[], style: FrameStyle, statusBar: RestyleSt
     const stamp = readStamp(node);
     if (!stamp) continue;
     stamp.style.cornerRadius = style.cornerRadius;
+    stamp.style.radiusFromDevice = style.radiusFromDevice;
+    stamp.style.strokeWidth = style.strokeWidth;
+    stamp.style.strokeColour = style.strokeColour;
     stamp.style.outline = style.outline;
-    applyStyle(node, stamp.style);
+    applyStyle(node, stamp.style, deviceByKey(stamp.deviceKey));
 
     // Title reconcile.
     let outermost: SceneNode = node;
@@ -493,13 +585,73 @@ async function restyleAll(ids: string[], style: FrameStyle, statusBar: RestyleSt
   }
 }
 
+/** Apply device sizing + status bar + styling to plain, user-drawn frames.
+ * A chosen phone device resizes the frame to its logical points (children
+ * reflow via their own Figma constraints — pixels aren't scaled) and can drop
+ * in a status bar. "Desktop"/no device leaves the frame's size alone and just
+ * styles it. The frame is stamped afterwards, so it joins the restyle path. */
+async function applyToFrames(
+  ids: string[],
+  options: ProcessOptions,
+  statusBar: RestyleStatusBar[]
+) {
+  const sbById = new Map(statusBar.map((s) => [s.id, s]));
+  const style = options.style;
+  const device = deviceByKey(options.deviceKey);
+  let updated = 0;
+  const results: SceneNode[] = [];
+  for (const id of ids) {
+    const node = (await figma.getNodeByIdAsync(id)) as SceneNode | null;
+    if (!node || node.removed || node.type !== "FRAME") continue;
+    if (readStamp(node)) continue; // already ours — belongs to restyle
+
+    // Phone device → resize to logical points; children reflow via constraints.
+    // Desktop / no device → leave the size untouched.
+    if (device) node.resize(device.ptWidth, device.ptHeight);
+
+    applyStyle(node, style, device);
+    stampFrame(node, options.tab, style, options.deviceKey);
+
+    const sb = sbById.get(id);
+    const wantsBar = sb ? sb.on : !!options.statusBar;
+    if (wantsBar && device && device.statusBarKind) {
+      // No screenshot to sample here — use the caller's sample if present,
+      // else read the frame's own background fill.
+      const sample = (sb && sb.sample) || frameStatusBarSample(node);
+      try {
+        await placeStatusBar(node, device, sample);
+      } catch (e) {
+        console.warn("Retina Turner: could not place status bar", e);
+        const detail = e instanceof Error ? e.message : String(e);
+        figma.notify(`Status bar failed: ${detail}`, { error: true });
+      }
+    }
+
+    results.push(node);
+    updated++;
+  }
+  if (results.length > 0) {
+    try {
+      figma.currentPage.selection = results;
+    } catch (e) {
+      // Off-page nodes can't be selected; not worth failing over.
+    }
+  }
+  figma.notify(
+    updated === 1
+      ? "Applied to 1 frame. Simply the best."
+      : `Applied to ${updated} frames. Simply the best.`
+  );
+}
+
 // ---- boot ------------------------------------------------------------------
 
 async function pushSelection() {
   const selection = figma.currentPage.selection;
   const images = await collectImages(selection);
   const styled = await collectStyled(selection);
-  const msg: MainToUI = { type: "images", images, styled };
+  const frames = collectFrames(selection);
+  const msg: MainToUI = { type: "images", images, styled, frames };
   figma.ui.postMessage(msg);
 }
 
@@ -511,6 +663,13 @@ async function loadPrefs(): Promise<Prefs> {
         activeTab: saved.activeTab || DEFAULT_PREFS.activeTab,
         computer: { ...DEFAULT_COMPUTER, ...saved.computer },
         phone: { ...DEFAULT_PHONE, ...saved.phone },
+        window: {
+          ...clampWindow(
+            (saved.window && saved.window.width) || WINDOW.defWidth,
+            (saved.window && saved.window.height) || WINDOW.defHeight
+          ),
+          userSized: !!(saved.window && saved.window.userSized),
+        },
       };
     }
   } catch (e) {
@@ -520,7 +679,13 @@ async function loadPrefs(): Promise<Prefs> {
 }
 
 async function main() {
-  figma.showUI(__html__, { width: 400, height: 660, themeColors: false });
+  // Load prefs before showing the UI so the window opens at the saved size.
+  const prefs = await loadPrefs();
+  figma.showUI(__html__, {
+    width: prefs.window.width,
+    height: prefs.window.height,
+    themeColors: false,
+  });
 
   figma.on("selectionchange", () => {
     pushSelection();
@@ -528,7 +693,6 @@ async function main() {
 
   figma.ui.onmessage = async (msg: UIToMain) => {
     if (msg.type === "ready") {
-      const prefs = await loadPrefs();
       const config: MainToUI = {
         type: "config",
         devices: DEVICES,
@@ -538,6 +702,10 @@ async function main() {
       };
       figma.ui.postMessage(config);
       await pushSelection();
+    } else if (msg.type === "resize") {
+      const size: WindowSize = clampWindow(msg.width, msg.height);
+      figma.ui.resize(size.width, size.height);
+      prefs.window = size; // persisted by the UI's save-prefs on drag end
     } else if (msg.type === "process") {
       try {
         await turnItAll(msg.items, msg.options);
@@ -554,6 +722,16 @@ async function main() {
       } catch (e) {
         console.error(e);
         figma.notify("Something went wrong while restyling. Check the console.", {
+          error: true,
+        });
+      }
+    } else if (msg.type === "apply-frames") {
+      try {
+        await applyToFrames(msg.ids, msg.options, msg.statusBar || []);
+        await pushSelection(); // the frames are now ours → refresh as styled
+      } catch (e) {
+        console.error(e);
+        figma.notify("Something went wrong while applying to the frame. Check the console.", {
           error: true,
         });
       }

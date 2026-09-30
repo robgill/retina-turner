@@ -11,7 +11,9 @@ export type TabId = "computer" | "phone";
  * data, not a type — old ids in saved prefs/stamps still round-trip. */
 export type FontId = string;
 
-/** Frame outline + shadow look. Values resolved in code.ts (see OUTLINES). */
+/** Frame drop-shadow preset. Values resolved in code.ts (see OUTLINES).
+ * Note: as of the border split, these control the SHADOW only — the border
+ * (weight + colour) is set independently via FrameStyle.strokeWidth/Colour. */
 export type OutlineId = "none" | "simple" | "soft";
 
 /** The WYSIWYG style choices applied to the output frame + title label. */
@@ -19,12 +21,16 @@ export interface FrameStyle {
   titleOn: boolean;
   font: FontId;
   fontColour: string; // hex, e.g. "#6b7280"
-  cornerRadius: number; // px: 17 | 22 | 41.5
-  outline: OutlineId;
+  cornerRadius: number; // px; the fallback/explicit value when radiusFromDevice is false
+  radiusFromDevice: boolean; // true = use the (detected/selected) device's own cornerRadius
+  strokeWidth: number; // border weight in px; 0 = no border
+  strokeColour: string; // hex border colour
+  outline: OutlineId; // drop-shadow preset only (see note on OutlineId)
 }
 
-/** Which status bar family a device wears (absent = no swap offered). */
-export type StatusBarKind = "se" | "notch" | "island";
+/** Which status bar family a device wears (absent = no swap offered).
+ * "island-18" is the iPhone 18's smaller Dynamic Island. */
+export type StatusBarKind = "se" | "notch" | "island" | "island-18";
 
 /** Colour sampled from a screenshot's status bar strip by the UI canvas. */
 export interface StatusBarSample {
@@ -44,6 +50,9 @@ export interface DevicePreset {
   cornerRadius: number;
   statusBarHeight: number;
   statusBarKind?: StatusBarKind;
+  /** Excluded from pixel-based auto-detection (e.g. iPhone 18, whose capture
+   * resolution is identical to the 17). Still selectable from the dropdown. */
+  manualOnly?: boolean;
 }
 
 /** Fixed pixel crop amounts for macOS window-screenshot shadow/padding. */
@@ -124,6 +133,16 @@ export interface RestyleStatusBar {
   sample: StatusBarSample | null; // null when on=true but sampling failed
 }
 
+/** A plain frame in the selection (not an image layer, not a plugin-stamped
+ * frame) that the user can convert: apply device sizing + status bar + styling
+ * to any frame they've drawn. */
+export interface FrameCandidate {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+}
+
 /** Per-tab persisted preferences. */
 export interface TabPrefs {
   deviceKey: string;
@@ -134,13 +153,26 @@ export interface TabPrefs {
   font: FontId;
   fontColour: string;
   cornerRadius: number;
+  radiusFromDevice: boolean;
+  strokeWidth: number;
+  strokeColour: string;
   outline: OutlineId;
+}
+
+/** Persisted plugin-window size, so it reopens where the user left it.
+ * `userSized` flips true once the user drags the resize grip — until then the
+ * UI is free to auto-fit the window to its content on open. */
+export interface WindowSize {
+  width: number;
+  height: number;
+  userSized?: boolean;
 }
 
 export interface Prefs {
   activeTab: TabId;
   computer: TabPrefs;
   phone: TabPrefs;
+  window: WindowSize;
 }
 
 // ---- Message envelopes ----
@@ -153,7 +185,12 @@ export type MainToUI =
       prefs: Prefs;
       insets: MacShadowInsets;
     }
-  | { type: "images"; images: ImagePayload[]; styled: StyledItem[] };
+  | {
+      type: "images";
+      images: ImagePayload[];
+      styled: StyledItem[];
+      frames: FrameCandidate[];
+    };
 
 export type UIToMain =
   | { type: "ready" }
@@ -164,6 +201,16 @@ export type UIToMain =
       style: FrameStyle;
       statusBar: RestyleStatusBar[];
     }
+  | {
+      // Apply device sizing + status bar + styling to plain selected frames.
+      // A phone device resizes the frame to its logical points (children reflow
+      // via their own constraints); "desktop"/no device leaves the size alone.
+      type: "apply-frames";
+      ids: string[];
+      options: ProcessOptions;
+      statusBar: RestyleStatusBar[];
+    }
   | { type: "save-prefs"; prefs: Prefs }
+  | { type: "resize"; width: number; height: number }
   | { type: "notify"; message: string }
   | { type: "cancel" };

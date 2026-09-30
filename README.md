@@ -16,10 +16,16 @@ restyled or removed later without touching the pixels.
 Two tabs (labelled **Captured on: 💻 Mac / 📱 iPhone**), because the work differs
 by source:
 
-- **💻 Mac** — window / QuickTime captures. Clips the macOS drop shadow with a
-  fixed inset, optionally width-normalizes to a chosen device, then frames it.
+- **💻 Mac** — window / QuickTime captures. Clips the macOS drop shadow by
+  detecting the opaque window from the image's alpha channel (scale-independent,
+  so it survives clipboard managers that re-encode the paste; falls back to
+  fixed insets when there's no usable transparency), optionally width-normalizes
+  to a chosen device, then frames it.
 - **📱 iPhone** — device screenshots. Auto-detects the device by pixel
-  dimensions and resizes the Retina capture down to logical points.
+  dimensions and resizes the Retina capture down to logical points. The iPhone
+  18 Pro / Pro Max share the 17's capture resolution, so they're **manual-select
+  only** from the Device menu (auto-detect can't distinguish them); picking one
+  applies the 18's smaller Dynamic Island.
 
 Both tabs carry a **Keep original image quality** toggle (on by default). The
 frame is always sized in logical points; the toggle decides what goes in the
@@ -37,9 +43,13 @@ live preview of the actual screenshot:
   face is one entry: id, dropdown label, CSS stack for the preview, and the
   Figma font candidates to try (every chain ends at Inter).
 - **Font Colour** — 4 swatches
-- **Corner Radius** — Clean (17px) / 22px / iPhone (41.5px)
-- **Outline & Shadow** — None / Simple (border + hard shadow) / Blur (border +
-  soft shadow), values taken from the reference frames in the Figma file
+- **Corner Radius** — swatches for 0 / 17 / 22 / **Device** plus a **numeric
+  input** for any value. The Device swatch uses the chosen device's own radius;
+  on Auto-detect it resolves per screenshot once the phone is identified.
+- **Outline (border)** — an independent **width input** (px; 0 = none) and a
+  **colour picker**. No longer bundled with the shadow.
+- **Shadow** — None / Simple (hard offset) / Blur (soft), values from
+  [`src/styles.ts`](src/styles.ts)
 
 Shared: one **Turn it** button, batch support (same settings applied to every
 selected image), an optional **title label** above the frame (named from the
@@ -50,8 +60,15 @@ never touches the pixels.
 **Turn it** also handles frames the plugin made before: any already-turned
 frames in the selection are reconciled with the current controls without
 re-processing pixels, alongside (or instead of) turning fresh screenshots in
-the same selection. That reconciliation covers corner radius, outline/shadow,
-the status bar, and the title. Titles are fully
+the same selection. That reconciliation covers corner radius, border, shadow,
+the status bar, and the title.
+
+It works on **plain frames you drew** too: select any frame, pick a device +
+options, and **Turn it** applies the frame style, drops in a status bar, and —
+for a chosen phone device — resizes the frame to that device's logical points
+(children reflow via their own constraints). A desktop / no-device selection
+just styles the frame without resizing. The frame is stamped afterwards, so it
+joins the restyle path. Titles are fully
 round-trippable — turning the toggle on wraps the frame in a label stack in
 place (nothing moves on canvas), turning it off unwraps and restores the
 frame's position, and leaving it on re-points an existing label at the current
@@ -64,7 +81,7 @@ font and colour while keeping whatever it's been renamed to.
 | [`src/code.ts`](src/code.ts) | main | selection, image bytes, framing, styling, prefs |
 | [`ui.html`](ui.html) | UI iframe | WYSIWYG controls, live preview, canvas pixel work (clip/resize) |
 | [`src/devices.ts`](src/devices.ts) | shared | device table + `detectDevice()` |
-| [`src/styles.ts`](src/styles.ts) | shared | corner-radius + outline/shadow definitions |
+| [`src/styles.ts`](src/styles.ts) | shared | corner-radius presets, border defaults, shadow presets |
 | [`src/insets.ts`](src/insets.ts) | shared | macOS shadow crop insets + window corner radius |
 | [`src/types.ts`](src/types.ts) | shared | message contracts between threads |
 
@@ -116,14 +133,18 @@ Phase 2 — status-bar replacement (first cut, iPhone tab):
 - Art lives in [`src/statusbars.ts`](src/statusbars.ts) as embedded SVG +
   layout tables (community-safe: no team library, works on any account). On
   first use the plugin materialises a local **Status Bar** component set
-  (variants `Device = SE | Notch | Island` × `Mode = Light | Dark`) on a
-  "🎸 Retina Turner Assets" page, then places instances. Pieces are edge/center
+  (variants `Device = SE | Notch | Island | Island 18` × `Mode = Light | Dark`)
+  on a "❖ Components" page, then places instances. Pieces are edge/center
   anchored, so one component fits every device width; time text stays editable
   on the masters.
 - The UI samples the screenshot's status-bar strip (dominant colour) to set
-  the bar background and pick the Light/Dark variant automatically.
-- Device → status bar mapping via `statusBarKind` in the device table. The
-  device table is iPhone-only for now; landscape captures are skipped.
+  the bar background and pick the Light/Dark variant automatically. On the
+  apply-to-a-plain-frame path there's no screenshot to sample, so the bar colour
+  and mode come from the frame's own background fill.
+- Device → status bar mapping via `statusBarKind` in the device table
+  (`island-18` is the iPhone 18's smaller Dynamic Island). The device table is
+  iPhone-only for now; landscape captures are skipped.
 
-Still unbuilt: manual light/dark + colour override in the dialog, non-iPhone
-devices (iPad/Android) in the device table, custom user-defined presets.
+Still unbuilt: manual light/dark + colour override in the dialog, custom
+per-shadow parameters, non-iPhone devices (iPad/Android) in the device table,
+custom user-defined presets.

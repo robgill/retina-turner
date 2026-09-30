@@ -16,8 +16,9 @@
 import { DevicePreset, StatusBarKind, StatusBarSample } from "./types";
 
 /** Bump when the embedded art/layout changes; stale sets are rebuilt.
- *  v2: moved onto the "❖ Components" page, wrapped in a titled Section. */
-export const STATUS_BAR_VERSION = "2";
+ *  v2: moved onto the "❖ Components" page, wrapped in a titled Section.
+ *  v3: added the iPhone 18 "Island 18" variant (smaller Dynamic Island). */
+export const STATUS_BAR_VERSION = "3";
 
 const COMPONENTS_PAGE_NAME = "❖ Components";
 const SECTION_NAME = "Retina Turner — Status Bars";
@@ -88,6 +89,11 @@ const SVG_ISLAND = `<svg width="111" height="31" viewBox="0 0 111 31" fill="none
 
 const SVG_ISLAND_LEVELS = `<svg width="93.5" height="22" viewBox="0 0 93.5 22" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M19.2 6.03302C19.2 5.39998 18.7224 4.88679 18.1333 4.88679H17.0667C16.4776 4.88679 16 5.39998 16 6.03302V15.967C16 16.6 16.4776 17.1132 17.0667 17.1132H18.1333C18.7224 17.1132 19.2 16.6 19.2 15.967V6.03302ZM11.7659 7.33207H12.8326C13.4217 7.33207 13.8992 7.85757 13.8992 8.50581V15.9395C13.8992 16.5877 13.4217 17.1132 12.8326 17.1132H11.7659C11.1768 17.1132 10.6992 16.5877 10.6992 15.9395V8.50581C10.6992 7.85757 11.1768 7.33207 11.7659 7.33207ZM7.43411 9.98112H6.36745C5.77834 9.98112 5.30078 10.5133 5.30078 11.1698V15.9245C5.30078 16.581 5.77834 17.1132 6.36745 17.1132H7.43411C8.02322 17.1132 8.50078 16.581 8.50078 15.9245V11.1698C8.50078 10.5133 8.02322 9.98112 7.43411 9.98112ZM2.13333 12.4264H1.06667C0.477563 12.4264 0 12.951 0 13.5981V15.9415C0 16.5886 0.477563 17.1132 1.06667 17.1132H2.13333C2.72244 17.1132 3.2 16.5886 3.2 15.9415V13.5981C3.2 12.951 2.72244 12.4264 2.13333 12.4264Z" fill="#1B1B1B"/><path fill-rule="evenodd" clip-rule="evenodd" d="M39.7713 7.30213C42.2584 7.30223 44.6504 8.22432 46.4529 9.8778C46.5887 10.0055 46.8056 10.0038 46.9393 9.87419L48.2368 8.61072C48.3045 8.54496 48.3422 8.45588 48.3417 8.3632C48.3411 8.27052 48.3023 8.18188 48.2338 8.11688C43.5028 3.74217 36.0391 3.74217 31.3081 8.11688C31.2395 8.18183 31.2006 8.27045 31.2 8.36313C31.1994 8.45581 31.237 8.54491 31.3047 8.61072L32.6026 9.87419C32.7362 10.004 32.9533 10.0056 33.0889 9.8778C34.8917 8.22421 37.2839 7.30212 39.7713 7.30213ZM39.7679 11.5224C41.1253 11.5223 42.4341 12.0341 43.4403 12.9582C43.5764 13.0893 43.7907 13.0865 43.9234 12.9518L45.2107 11.6325C45.2784 11.5633 45.3161 11.4694 45.3151 11.3718C45.3141 11.2743 45.2746 11.1812 45.2054 11.1134C42.1416 8.22257 37.3969 8.22257 34.333 11.1134C34.2638 11.1812 34.2244 11.2743 34.2234 11.3719C34.2225 11.4695 34.2603 11.5634 34.3282 11.6325L35.6151 12.9518C35.7478 13.0865 35.9621 13.0893 36.0982 12.9582C37.1037 12.0347 38.4115 11.523 39.7679 11.5224ZM42.2924 14.316C42.2943 14.4213 42.2572 14.5229 42.1899 14.5967L40.0133 17.0514C39.9495 17.1236 39.8625 17.1642 39.7717 17.1642C39.6809 17.1642 39.5939 17.1236 39.5301 17.0514L37.3531 14.5967C37.2859 14.5228 37.2489 14.4212 37.2509 14.3159C37.2528 14.2105 37.2937 14.1108 37.3636 14.0401C38.7537 12.7262 40.7897 12.7262 42.1798 14.0401C42.2497 14.1108 42.2904 14.2106 42.2924 14.316Z" fill="#1B1B1B"/><rect opacity="0.35" x="60.8417" y="5" width="24" height="12" rx="3.8" stroke="#1B1B1B"/><path opacity="0.4" d="M86.3417 9V13.0755C87.1464 12.7303 87.6697 11.9273 87.6697 11.0377C87.6697 10.1481 87.1464 9.34517 86.3417 9" fill="#1B1B1B"/><rect x="62.3417" y="6.5" width="21" height="9" rx="2.5" fill="#1B1B1B"/></svg>`;
 
+// iPhone 18 Dynamic Island — smaller than the 17's (96×36 vs 111×31, taller and
+// narrower), reconstructed to the exact bounds from the reference Figma node.
+// Concentric camera lens on the right, mirroring SVG_ISLAND's look.
+const SVG_ISLAND_18 = `<svg width="96" height="36" viewBox="0 0 96 36" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="96" height="36" rx="18" fill="#030303"/><circle cx="80" cy="18" r="10" fill="#0E0B0F"/><circle cx="80" cy="18" r="5.6" fill="#161424"/><circle cx="80" cy="18" r="3.35" fill="#0F0F2A"/><circle cx="80" cy="16.9" r="1.1" fill="#393752"/></svg>`;
+
 // ---- layout tables ----------------------------------------------------------
 
 const STATUS_BARS: StatusBarDef[] = [
@@ -129,6 +135,19 @@ const STATUS_BARS: StatusBarDef[] = [
       { name: "Time", text: { chars: "10:09", fontSize: 17, weight: "Semi Bold" }, x: 47.25, y: 16, w: 47, h: 22, anchor: "left" },
       { name: "Dynamic Island", svg: SVG_ISLAND, x: 132, y: 12, w: 111, h: 31, anchor: "center", chrome: true },
       { name: "Levels", svg: SVG_ISLAND_LEVELS, x: 257.5, y: 16, w: 93.5, h: 22, anchor: "right" },
+    ],
+  },
+  {
+    // iPhone 18: smaller Island. Piece bounds from the reference node (351×54
+    // bar): Time x24/y21, Island centred x127.5/y14 (96×36), Levels right cluster.
+    kind: "island-18",
+    label: "Island 18",
+    width: 351,
+    height: 54,
+    pieces: [
+      { name: "Time", text: { chars: "9:41", fontSize: 17, weight: "Semi Bold" }, x: 24, y: 21, w: 69.5, h: 22, anchor: "left" },
+      { name: "Dynamic Island", svg: SVG_ISLAND_18, x: 127.5, y: 14, w: 96, h: 36, anchor: "center", chrome: true },
+      { name: "Levels", svg: SVG_ISLAND_LEVELS, x: 233.5, y: 21, w: 93.5, h: 22, anchor: "right" },
     ],
   },
 ];

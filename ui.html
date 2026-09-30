@@ -130,6 +130,19 @@
         background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36' fill='none'%3E%3Cpath d='M8 19.5359L14 25.0359L27 10' stroke='white' stroke-width='2'/%3E%3C/svg%3E") center / 28px 28px no-repeat;
       }
 
+      /* Numeric + colour inputs on the style rows */
+      .ctrl-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .num-field { display: inline-flex; align-items: center; gap: 4px; }
+      .num-field input[type="number"] {
+        width: 58px; height: 32px; padding: 0 6px; border: 1px solid var(--border); border-radius: 6px;
+        font-size: 13px; color: var(--ink); background: #fff; box-sizing: border-box;
+      }
+      .num-field .unit { font-size: 12px; color: var(--muted); }
+      .colour-input {
+        width: 40px; height: 32px; padding: 2px; border: 1px solid var(--border); border-radius: 6px;
+        background: #fff; cursor: pointer;
+      }
+
       /* Preview */
       .preview-wrap {
         background: #fafafa; border: 1px solid var(--border); border-radius: 10px;
@@ -158,6 +171,18 @@
       }
       .btn-turn:disabled { opacity: 0.5; cursor: default; }
       .hidden { display: none !important; }
+
+      /* Drag-to-resize grips, one per corner. Invisible by design — the resize
+         cursor on hover is the only hint. "Pull inward to shrink, push outward
+         to grow" — so a reachable top corner can shrink a window that overflows
+         the bottom of a smaller screen. */
+      .resize-grip {
+        position: fixed; width: 16px; height: 16px; z-index: 20; touch-action: none;
+      }
+      .resize-grip.nw { top: 0; left: 0; cursor: nwse-resize; }
+      .resize-grip.ne { top: 0; right: 0; cursor: nesw-resize; }
+      .resize-grip.sw { bottom: 0; left: 0; cursor: nesw-resize; }
+      .resize-grip.se { bottom: 0; right: 0; cursor: nwse-resize; }
     </style>
   </head>
   <body>
@@ -243,24 +268,45 @@
 
       <div class="divider"></div>
 
-      <!-- Add Phone Frame -->
-      <p class="section-title">Add Phone Frame</p>
-      <div class="cols block">
-        <div class="col">
-          <p class="field-label">Corner Radius:</p>
+      <!-- Frame style -->
+      <p class="section-title">Frame style</p>
+
+      <!-- Corner radius: presets (0 / 17 / 22 / device) + a typed value -->
+      <div class="block">
+        <p class="field-label">Corner Radius:</p>
+        <div class="ctrl-row">
           <div class="swatches" id="radius-group">
+            <button class="swatch" data-value="0" title="Square"><span class="chip tintable" style="border-radius:0"></span></button>
             <button class="swatch" data-value="17"><span class="chip tintable" style="border-radius:0;border-top-left-radius:12px"></span></button>
             <button class="swatch" data-value="22"><span class="chip tintable" style="border-radius:0;border-top-left-radius:18px"></span></button>
-            <button class="swatch" data-value="41.5"><span class="chip tintable" style="border-radius:0;border-top-left-radius:30px"></span></button>
+            <button class="swatch" data-value="device" title="Use the device's own corner radius"><span class="chip tintable" style="border-radius:0;border-top-left-radius:36px"></span></button>
+          </div>
+          <div class="num-field">
+            <input type="number" id="radius-input" min="0" step="1" />
+            <span class="unit">px</span>
           </div>
         </div>
-        <div class="col">
-          <p class="field-label">Outline &amp; Shadow:</p>
-          <div class="swatches spread" id="outline-group">
-            <button class="swatch" data-value="none"><span class="chip tintable"></span></button>
-            <button class="swatch" data-value="simple"><span class="chip tintable" style="border:3px solid #2c2c2c;box-shadow:-6px 6px 0 rgba(0,0,0,0.14)"></span></button>
-            <button class="swatch" data-value="soft"><span class="chip tintable" style="border:3px solid #2c2c2c;box-shadow:0 5px 14px rgba(0,0,0,0.4)"></span></button>
+      </div>
+
+      <!-- Border: independent width + colour -->
+      <div class="block">
+        <p class="field-label">Outline (border):</p>
+        <div class="ctrl-row">
+          <div class="num-field">
+            <input type="number" id="stroke-width-input" min="0" step="1" />
+            <span class="unit">px</span>
           </div>
+          <input type="color" id="stroke-colour-input" class="colour-input" title="Border colour" />
+        </div>
+      </div>
+
+      <!-- Shadow presets (border is separate above) -->
+      <div class="block">
+        <p class="field-label">Shadow:</p>
+        <div class="swatches spread" id="outline-group">
+          <button class="swatch" data-value="none"><span class="chip tintable"></span></button>
+          <button class="swatch" data-value="simple"><span class="chip tintable" style="box-shadow:-6px 6px 0 rgba(0,0,0,0.14)"></span></button>
+          <button class="swatch" data-value="soft"><span class="chip tintable" style="box-shadow:0 5px 14px rgba(0,0,0,0.4)"></span></button>
         </div>
       </div>
 
@@ -277,12 +323,26 @@
       <button class="btn-close" id="close-btn">Close</button>
       <button class="btn-turn" id="turn" disabled>Turn it</button>
     </footer>
+    <div class="resize-grip nw" data-corner="nw" title="Drag to resize"></div>
+    <div class="resize-grip ne" data-corner="ne" title="Drag to resize"></div>
+    <div class="resize-grip sw" data-corner="sw" title="Drag to resize"></div>
+    <div class="resize-grip se" data-corner="se" title="Drag to resize"></div>
 
     <script>
-      var STATE = { images: [], styled: [], devices: [], fonts: [], prefs: null, tab: "computer",
+      var STATE = { images: [], styled: [], frames: [], devices: [], fonts: [], prefs: null, tab: "computer",
                     insets: { left: 57, right: 57, top: 39, bottom: 75 }, previewUrl: null };
+      // Normalise a colour to the "#rrggbb" form that <input type=color> needs.
+      function normHex(hex) {
+        if (typeof hex !== "string") return "#2c2c2c";
+        var h = hex.charAt(0) === "#" ? hex.slice(1) : hex;
+        if (h.length === 3) h = h.replace(/./g, function (c) { return c + c; });
+        return /^[0-9a-fA-F]{6}$/.test(h) ? "#" + h.toLowerCase() : "#2c2c2c";
+      }
       var FALLBACK_FONTS = [{ id: "inter", label: "Inter", css: "Inter, -apple-system, sans-serif" }];
       var AUTO = "__auto__", NONE = "__none__";
+      // Window sizing (mirrors the main thread's clamp); margin leaves room for
+      // the OS menubar + Figma chrome so the window never runs off-screen.
+      var WIN_MIN_W = 360, WIN_MIN_H = 480, WIN_SCREEN_MARGIN = 140;
       var $ = function (id) { return document.getElementById(id); };
       function post(m) { parent.postMessage({ pluginMessage: m }, "*"); }
 
@@ -292,6 +352,8 @@
         var near = function (a, b) { return Math.abs(a - b) <= tol; };
         for (var i = 0; i < STATE.devices.length; i++) {
           var d = STATE.devices[i];
+          // Skip manual-only devices (e.g. iPhone 18 — pixel-identical to the 17).
+          if (d.manualOnly) continue;
           if ((near(pxW, d.pxWidth) && near(pxH, d.pxHeight)) ||
               (near(pxW, d.pxHeight) && near(pxH, d.pxWidth))) return d;
         }
@@ -326,6 +388,40 @@
         ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
         ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
         return c;
+      }
+
+      // Tight bounding box (in native px) of the near-opaque window inside a
+      // macOS window capture, found from the alpha channel so it excludes the
+      // semi-transparent drop shadow. Scale-independent — unlike the fixed pixel
+      // insets it survives clipboard managers that re-encode/resize the paste.
+      // Returns null when there's no usable transparency (e.g. a flattened
+      // paste), so the caller can fall back to the fixed insets.
+      function detectWindowBounds(bmp) {
+        var scale = Math.min(1, 500 / bmp.width);
+        var cw = Math.max(1, Math.round(bmp.width * scale));
+        var ch = Math.max(1, Math.round(bmp.height * scale));
+        var c = document.createElement("canvas");
+        c.width = cw; c.height = ch;
+        var ctx = c.getContext("2d");
+        ctx.drawImage(bmp, 0, 0, cw, ch);
+        var data;
+        try { data = ctx.getImageData(0, 0, cw, ch).data; } catch (e) { return null; }
+        var ALPHA = 160; // above the shadow's alpha, below the opaque window's 255
+        var minX = cw, minY = ch, maxX = -1, maxY = -1, any = false;
+        for (var y = 0; y < ch; y++) {
+          for (var x = 0; x < cw; x++) {
+            if (data[(y * cw + x) * 4 + 3] >= ALPHA) {
+              any = true;
+              if (x < minX) minX = x; if (x > maxX) maxX = x;
+              if (y < minY) minY = y; if (y > maxY) maxY = y;
+            }
+          }
+        }
+        if (!any) return null;
+        return {
+          x: minX / scale, y: minY / scale,
+          w: (maxX - minX + 1) / scale, h: (maxY - minY + 1) / scale
+        };
       }
 
       // Dominant colour of the status-bar strip → bar bg + light/dark mode.
@@ -368,9 +464,23 @@
         var sy = img.nodeHeight ? h / img.nodeHeight : 1;
         var crop = { x: 0, y: 0, w: w, h: h };
         if (opts.clipShadow) {
-          var ins = STATE.insets;
-          var l = ins.left * sx, r = ins.right * sx, t = ins.top * sy, b = ins.bottom * sy;
-          if (w > l + r && h > t + b) crop = { x: l, y: t, w: w - l - r, h: h - t - b };
+          // Prefer alpha-based detection of the window (scale-independent, so it
+          // works no matter how a clipboard manager re-encoded the paste). Only
+          // accept it when it actually found padding to trim; otherwise fall
+          // back to the fixed, scale-adjusted insets (e.g. a flattened paste).
+          var bounds = detectWindowBounds(img.bitmap);
+          if (bounds && bounds.w > 8 && bounds.h > 8 &&
+              (bounds.w < w * 0.995 || bounds.h < h * 0.995)) {
+            var p = 1; // trim a 1px anti-aliased fringe, like the fixed insets did
+            crop = {
+              x: bounds.x + p, y: bounds.y + p,
+              w: Math.max(1, bounds.w - 2 * p), h: Math.max(1, bounds.h - 2 * p)
+            };
+          } else {
+            var ins = STATE.insets;
+            var l = ins.left * sx, r = ins.right * sx, t = ins.top * sy, b = ins.bottom * sy;
+            if (w > l + r && h > t + b) crop = { x: l, y: t, w: w - l - r, h: h - t - b };
+          }
         }
         var device = opts.deviceKey ? deviceByKey(opts.deviceKey) : null;
         var outW, outH, frameW, frameH;
@@ -432,11 +542,17 @@
         }
       }
       function readStyle() {
+        var radiusSel = getSel("radius-group");
+        var cr = parseFloat($("radius-input").value);
+        if (isNaN(cr)) cr = 17;
         return {
           titleOn: $("title-toggle").checked,
           font: $("font-select").value || "inter",
           fontColour: getSel("colour-group") || "#6b7280",
-          cornerRadius: parseFloat(getSel("radius-group") || "17"),
+          cornerRadius: cr,
+          radiusFromDevice: radiusSel === "device",
+          strokeWidth: Math.max(0, parseFloat($("stroke-width-input").value) || 0),
+          strokeColour: normHex($("stroke-colour-input").value),
           outline: getSel("outline-group") || "none"
         };
       }
@@ -445,9 +561,55 @@
         $("font-select").value = p.font;
         setFontFace();
         setSel("colour-group", p.fontColour);
-        setSel("radius-group", p.cornerRadius);
+        // Radius: numeric field is the source of truth; the "device" swatch marks
+        // "resolve from the device" and preset swatches just echo a matching value.
+        $("radius-input").value = (p.cornerRadius != null ? p.cornerRadius : 17);
+        if (p.radiusFromDevice) setSel("radius-group", "device");
+        else setSel("radius-group", String(p.cornerRadius));
+        $("stroke-width-input").value = (p.strokeWidth != null ? p.strokeWidth : 0);
+        $("stroke-colour-input").value = normHex(p.strokeColour || "#2c2c2c");
         setSel("outline-group", p.outline);
+        refreshDeviceRadiusDisplay();
         updateTitleStyleRow();
+      }
+
+      // The corner radius of the device currently chosen in the active tab's
+      // dropdown, or null on auto-detect / none / an unrecognised key.
+      function resolveDeviceRadius() {
+        var key = STATE.tab === "computer" ? $("mac-device").value : $("phone-device").value;
+        if (!key || key === AUTO || key === NONE) return null;
+        var d = deviceByKey(key);
+        return d ? d.cornerRadius : null;
+      }
+      // The radius the output will actually use, for the preview.
+      function effectiveRadius(s) {
+        if (s.radiusFromDevice) {
+          var r = resolveDeviceRadius();
+          return r != null ? r : (s.cornerRadius || 62);
+        }
+        return s.cornerRadius;
+      }
+      // While the "device" swatch is active, mirror the chosen device's radius
+      // into the field (blank on auto-detect — it resolves per screenshot).
+      function refreshDeviceRadiusDisplay() {
+        if (getSel("radius-group") !== "device") return;
+        var r = resolveDeviceRadius();
+        $("radius-input").value = (r != null ? r : "");
+      }
+      // Clicking a radius swatch: presets fill the field; "device" defers to the
+      // device's own radius (shown when a concrete device is picked).
+      function onRadiusSwatch(value) {
+        setSel("radius-group", value);
+        if (value === "device") refreshDeviceRadiusDisplay();
+        else $("radius-input").value = value;
+        onAnyChange();
+      }
+      // Typing a value is always a fixed radius: drop "device" mode and light up a
+      // matching preset swatch if the number happens to equal one.
+      function onRadiusInput() {
+        var v = parseFloat($("radius-input").value);
+        setSel("radius-group", isNaN(v) ? "" : String(v));
+        onAnyChange();
       }
 
       // Show the selected value in the matching typeface, echoing the design.
@@ -471,7 +633,8 @@
             ? $("quality-toggle-mac").checked
             : $("quality-toggle").checked,
           titleOn: s.titleOn, font: s.font, fontColour: s.fontColour,
-          cornerRadius: s.cornerRadius, outline: s.outline
+          cornerRadius: s.cornerRadius, radiusFromDevice: s.radiusFromDevice,
+          strokeWidth: s.strokeWidth, strokeColour: s.strokeColour, outline: s.outline
         };
       }
       function syncPrefs() {
@@ -497,21 +660,24 @@
 
         var im = $("preview-img");
         // Preview rounds all four corners (the top-left-only look is only the
-        // dialog's radius selector chips). The preview image is shown at 10%
-        // scale, so every px value from styles.ts (radius, stroke weight,
-        // shadow offset/blur) is scaled by PREVIEW_SCALE to match.
-        im.style.borderRadius = s.cornerRadius * PREVIEW_SCALE + "px";
-        if (s.outline === "none") {
-          im.style.border = "none"; im.style.boxShadow = "none";
-        } else if (s.outline === "simple") {
-          // OUTLINES.simple: stroke 12, shadow -20 20 0 @ 0.12
-          im.style.border = 12 * PREVIEW_SCALE + "px solid #2c2c2c";
+        // dialog's radius selector chips). The preview image is shown at 30%
+        // scale, so every px value (radius, stroke weight, shadow offset/blur)
+        // is scaled by PREVIEW_SCALE to match.
+        im.style.borderRadius = effectiveRadius(s) * PREVIEW_SCALE + "px";
+
+        // Border: independent width + colour (0 = none).
+        im.style.border = s.strokeWidth > 0
+          ? (s.strokeWidth * PREVIEW_SCALE + "px solid " + s.strokeColour)
+          : "none";
+
+        // Shadow: driven by the preset only (see OUTLINES in styles.ts).
+        if (s.outline === "simple") {
           im.style.boxShadow = -20 * PREVIEW_SCALE + "px " + 20 * PREVIEW_SCALE + "px 0 rgba(0,0,0,0.12)";
-        } else {
-          // OUTLINES.soft: stroke 12, shadows 0 11 40 @ 0.36 + 0 38 50 @ 0.15
-          im.style.border = 12 * PREVIEW_SCALE + "px solid #2c2c2c";
+        } else if (s.outline === "soft") {
           im.style.boxShadow = "0 " + 11 * PREVIEW_SCALE + "px " + 40 * PREVIEW_SCALE + "px rgba(0,0,0,0.36), " +
                                "0 " + 38 * PREVIEW_SCALE + "px " + 50 * PREVIEW_SCALE + "px rgba(0,0,0,0.15)";
+        } else {
+          im.style.boxShadow = "none";
         }
       }
 
@@ -534,6 +700,36 @@
       function turn() {
         if (STATE.images.length) turnImages();
         if (STATE.styled.length) restyleStyled();
+        if (STATE.frames.length) applyFrames();
+      }
+
+      // Apply device sizing + status bar + styling to plain selected frames.
+      // Uses the same controls as Turn it. A concrete phone device resizes the
+      // frame; Auto-detect / None (or the Mac tab's None) leaves size alone.
+      function applyFrames() {
+        if (!STATE.frames.length) return;
+        var tab = STATE.tab, style = readStyle();
+        var opts = { tab: tab, style: style };
+        var on;
+        if (tab === "computer") {
+          opts.deviceKey = $("mac-device").value === NONE ? "" : $("mac-device").value;
+          opts.statusBar = $("statusbar-toggle-mac").checked;
+          opts.clipShadow = $("clip-toggle").checked;
+          opts.keepQuality = $("quality-toggle-mac").checked;
+          on = $("statusbar-toggle-mac").checked;
+        } else {
+          opts.deviceKey = $("phone-device").value === AUTO ? "" : $("phone-device").value;
+          opts.statusBar = $("statusbar-toggle").checked;
+          opts.keepQuality = $("quality-toggle").checked;
+          on = $("statusbar-toggle").checked;
+        }
+        // No pixels to sample on a plain frame — the main thread reads the
+        // frame's own background fill for the bar colour/mode.
+        var sbEntries = STATE.frames.map(function (f) { return { id: f.id, on: on, sample: null }; });
+        post({ type: "apply-frames",
+               ids: STATE.frames.map(function (f) { return f.id; }),
+               options: opts, statusBar: sbEntries });
+        syncPrefs();
       }
 
       function turnImages() {
@@ -669,7 +865,7 @@
       }
 
       // ---- wiring ----------------------------------------------------------
-      function onAnyChange() { updateMacStatusBarRow(); updateTitleStyleRow(); updatePreview(); syncPrefs(); }
+      function onAnyChange() { updateMacStatusBarRow(); updateTitleStyleRow(); refreshDeviceRadiusDisplay(); updatePreview(); syncPrefs(); }
 
       function wire() {
         var tabs = document.querySelectorAll(".tab");
@@ -685,8 +881,8 @@
         });
         // font dropdown
         $("font-select").addEventListener("change", function () { setFontFace(); onAnyChange(); });
-        // swatch groups
-        ["colour-group", "radius-group", "outline-group"].forEach(function (gid) {
+        // swatch groups (colour + shadow are plain; radius is special-cased below)
+        ["colour-group", "outline-group"].forEach(function (gid) {
           var kids = $(gid).children;
           for (var k = 0; k < kids.length; k++) {
             kids[k].addEventListener("click", function () {
@@ -694,8 +890,81 @@
             });
           }
         });
+        // radius swatches also drive the numeric field
+        var rkids = $("radius-group").children;
+        for (var r = 0; r < rkids.length; r++) {
+          rkids[r].addEventListener("click", function () { onRadiusSwatch(this.getAttribute("data-value")); });
+        }
+        $("radius-input").addEventListener("input", onRadiusInput);
+        $("stroke-width-input").addEventListener("input", onAnyChange);
+        $("stroke-colour-input").addEventListener("input", onAnyChange);
         $("turn").addEventListener("click", turn);
         $("close-btn").addEventListener("click", function () { post({ type: "cancel" }); });
+        wireResize();
+      }
+
+      // ---- window resize ---------------------------------------------------
+      // Drag the corner grip → ask the main thread to resize (it clamps, and
+      // Figma caps the height to the app viewport). The final size is persisted
+      // and flips userSized, so we stop auto-fitting once the user takes over.
+      function wireResize() {
+        var grips = document.querySelectorAll(".resize-grip");
+        for (var i = 0; i < grips.length; i++) bindGrip(grips[i]);
+      }
+      // The window is anchored top-left (Figma repositions nothing), so each
+      // grip changes width/height only. Right/bottom grips grow with the drag;
+      // left/top grips are inverted, so dragging a corner *inward* shrinks and
+      // *outward* grows — which lets a reachable top corner shrink an over-tall
+      // window whose bottom grip is off-screen.
+      function bindGrip(grip) {
+        var corner = grip.getAttribute("data-corner");
+        var signX = (corner === "ne" || corner === "se") ? 1 : -1;
+        var signY = (corner === "sw" || corner === "se") ? 1 : -1;
+        var resizing = false, sx = 0, sy = 0, sw = 0, sh = 0;
+        grip.addEventListener("pointerdown", function (e) {
+          resizing = true; sx = e.screenX; sy = e.screenY;
+          sw = window.innerWidth; sh = window.innerHeight;
+          try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+          e.preventDefault();
+        });
+        grip.addEventListener("pointermove", function (e) {
+          if (!resizing) return;
+          post({ type: "resize",
+                 width: Math.round(sw + signX * (e.screenX - sx)),
+                 height: Math.round(sh + signY * (e.screenY - sy)) });
+        });
+        function end(e) {
+          if (!resizing) return;
+          resizing = false;
+          try { grip.releasePointerCapture(e.pointerId); } catch (_) {}
+          if (STATE.prefs) {
+            STATE.prefs.window = { width: window.innerWidth, height: window.innerHeight, userSized: true };
+            post({ type: "save-prefs", prefs: STATE.prefs });
+          }
+        }
+        grip.addEventListener("pointerup", end);
+        grip.addEventListener("pointercancel", end);
+      }
+
+      // On open: keep the window on-screen. Always clamp height to the usable
+      // screen (recovers a size saved on a bigger monitor that would overflow a
+      // smaller one). When the user hasn't taken manual control, also grow to
+      // fit the content. Both are bounded by the screen, so it never overflows.
+      function autoFitWindow(userSized) {
+        var scr = window.screen || {};
+        var screenH = scr.availHeight || window.innerHeight;
+        var screenW = scr.availWidth || window.innerWidth;
+        var maxH = Math.max(WIN_MIN_H, screenH - WIN_SCREEN_MARGIN);
+        var target = window.innerHeight;
+        if (!userSized) {
+          var m = document.querySelector("main"), f = document.querySelector("footer");
+          if (m) target = m.scrollHeight + (f ? f.offsetHeight : 0);
+        }
+        target = Math.min(Math.max(target, WIN_MIN_H), maxH);
+        var w = Math.min(window.innerWidth, Math.max(WIN_MIN_W, screenW));
+        if (Math.abs(target - window.innerHeight) > 2 || Math.abs(w - window.innerWidth) > 2) {
+          post({ type: "resize", width: Math.round(w), height: Math.round(target) });
+        }
       }
 
       // ---- boot ------------------------------------------------------------
@@ -720,12 +989,19 @@
         $("quality-toggle-mac").checked = !!msg.prefs.computer.keepQuality;
         updateMacStatusBarRow();
         setTab(msg.prefs.activeTab || "computer");
+        // Keep the window on-screen and fit it on open (deferred so layout has
+        // settled). Runs even when userSized, so a size saved on a bigger
+        // monitor is clamped down to a smaller screen instead of overflowing.
+        setTimeout(function () {
+          autoFitWindow(!!(msg.prefs.window && msg.prefs.window.userSized));
+        }, 0);
       }
 
       function countText() {
         var parts = [];
         if (STATE.images.length) parts.push(STATE.images.length + (STATE.images.length === 1 ? " image" : " images"));
         if (STATE.styled.length) parts.push(STATE.styled.length + " styled " + (STATE.styled.length === 1 ? "frame" : "frames"));
+        if (STATE.frames.length) parts.push(STATE.frames.length + (STATE.frames.length === 1 ? " frame" : " frames"));
         return parts.length ? parts.join(" · ") + " selected" : "Select an image or a frame";
       }
 
@@ -735,7 +1011,7 @@
       function updateBadgeState(forceSelected) {
         var el = $("count").parentNode;
         var hasSel = forceSelected === true ||
-                     (STATE.images.length + STATE.styled.length) > 0;
+                     (STATE.images.length + STATE.styled.length + STATE.frames.length) > 0;
         el.classList.toggle("empty", !hasSel);
         if (hasSel && !badgeSelected) {
           // Remove + reflow + re-add so the keyframe animation replays.
@@ -753,7 +1029,16 @@
       // Called from onStyled and onImages, which both run on every selection
       // message (onStyled first).
       function updateTurnEnabled() {
-        $("turn").disabled = (STATE.images.length + STATE.styled.length) === 0;
+        $("turn").disabled = (STATE.images.length + STATE.styled.length + STATE.frames.length) === 0;
+      }
+
+      // Plain frames in the selection the user can convert (resize + status bar
+      // + styling). No pixel decode needed — just track them and refresh the UI.
+      function onFrames(list) {
+        STATE.frames = list || [];
+        $("count").textContent = countText();
+        updateBadgeState();
+        updateTurnEnabled();
       }
 
       // Previously-turned frames found in the selection: pre-fill the
@@ -763,8 +1048,14 @@
         var n = STATE.styled.length;
         updateTurnEnabled();
         if (n > 0) {
-          setSel("radius-group", STATE.styled[0].style.cornerRadius);
-          setSel("outline-group", STATE.styled[0].style.outline);
+          var st = STATE.styled[0].style;
+          $("radius-input").value = (st.cornerRadius != null ? st.cornerRadius : 17);
+          if (st.radiusFromDevice) setSel("radius-group", "device");
+          else setSel("radius-group", String(st.cornerRadius));
+          $("stroke-width-input").value = (st.strokeWidth != null ? st.strokeWidth : 0);
+          $("stroke-colour-input").value = normHex(st.strokeColour || "#2c2c2c");
+          setSel("outline-group", st.outline);
+          refreshDeviceRadiusDisplay();
           updatePreview();
         }
       }
@@ -813,7 +1104,7 @@
         var msg = event.data.pluginMessage;
         if (!msg) return;
         if (msg.type === "config") onConfig(msg);
-        else if (msg.type === "images") { onStyled(msg.styled); onImages(msg.images); }
+        else if (msg.type === "images") { onStyled(msg.styled); onFrames(msg.frames); onImages(msg.images); }
       };
 
       post({ type: "ready" });

@@ -11,29 +11,31 @@ export interface ShadowDef {
   opacity: number; // 0..1
 }
 
+// A drop-shadow preset. The border (weight + colour) is no longer part of this
+// — it's set independently on the frame from FrameStyle.strokeWidth/strokeColour.
 export interface OutlineDef {
-  stroke?: string; // hex; omit for no border
-  strokeWeight?: number;
   shadows: ShadowDef[];
 }
 
-// Corner-radius options offered in the UI (px).
-export const CORNER_RADII = { clean: 17, mid: 22, iphone: 41.5 };
+// Fixed corner-radius presets offered as swatches (px). The far-right "device"
+// swatch is not here — it resolves to the chosen/detected device's own radius.
+export const CORNER_RADII = { none: 0, clean: 17, mid: 22 };
 
-// Outline & Shadow options.
-//  - none   → Clean frame: no border, no shadow
-//  - simple → Note frame:  thick border + a hard offset shadow
-//  - soft   → Blur frame:  thick border + a big soft blurred shadow
+// Border defaults for a freshly-styled frame. Border is opt-in: width 0 means
+// no border until the user types one in.
+export const DEFAULT_STROKE_WIDTH = 0;
+export const DEFAULT_STROKE_COLOUR = "#2c2c2c";
+
+// Drop-shadow presets (shadow only — border is independent now).
+//  - none   → no shadow
+//  - simple → a hard offset shadow (was the "Note" frame)
+//  - soft   → a big soft blurred shadow (was the "Blur" frame)
 export const OUTLINES: Record<OutlineId, OutlineDef> = {
   none: { shadows: [] },
   simple: {
-    stroke: "#2c2c2c",
-    strokeWeight: 12,
     shadows: [{ x: -20, y: 20, blur: 0, color: "#000000", opacity: 0.12 }],
   },
   soft: {
-    stroke: "#2c2c2c",
-    strokeWeight: 12,
     shadows: [
       { x: 0, y: 11, blur: 40, color: "#000000", opacity: 0.36 },
       { x: 0, y: 38, blur: 50, color: "#000000", opacity: 0.15 },

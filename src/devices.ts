@@ -11,9 +11,40 @@ import { DevicePreset } from "./types";
 
 export const DEVICES: DevicePreset[] = [
   // ---- iPhone (newest first) ----
+  // The iPhone 18 Pro / Pro Max share the exact capture resolution of the 17
+  // Pro / Pro Max, so a screenshot alone can't tell them apart. They carry
+  // `manualOnly` (skipped by detectDevice) and are chosen from the dropdown when
+  // you want the 18's smaller Dynamic Island ("island-18"). Auto-detect on those
+  // resolutions falls through to the 17 entries below.
+  {
+    key: "iphone-18-pro-max",
+    name: "iPhone 18 Pro Max",
+    pxWidth: 1320,
+    pxHeight: 2868,
+    ptWidth: 440,
+    ptHeight: 956,
+    scale: 3,
+    cornerRadius: 62,
+    statusBarHeight: 62,
+    statusBarKind: "island-18",
+    manualOnly: true,
+  },
+  {
+    key: "iphone-18-pro",
+    name: "iPhone 18 Pro",
+    pxWidth: 1206,
+    pxHeight: 2622,
+    ptWidth: 402,
+    ptHeight: 874,
+    scale: 3,
+    cornerRadius: 62,
+    statusBarHeight: 62,
+    statusBarKind: "island-18",
+    manualOnly: true,
+  },
   {
     key: "iphone-17-pro-max",
-    name: "iPhone 18 Pro Max / 17 Pro Max / 16 Pro Max",
+    name: "iPhone 17 Pro Max / 16 Pro Max",
     pxWidth: 1320,
     pxHeight: 2868,
     ptWidth: 440,
@@ -25,7 +56,7 @@ export const DEVICES: DevicePreset[] = [
   },
   {
     key: "iphone-17",
-    name: "iPhone 18 Pro / 17 / 17 Pro / 16 Pro",
+    name: "iPhone 17 / 17 Pro / 16 Pro",
     pxWidth: 1206,
     pxHeight: 2622,
     ptWidth: 402,
@@ -181,8 +212,9 @@ export function detectDevice(
   const near = (a: number, b: number) => Math.abs(a - b) <= tolerance;
   return DEVICES.find(
     (d) =>
-      (near(pxW, d.pxWidth) && near(pxH, d.pxHeight)) ||
-      (near(pxW, d.pxHeight) && near(pxH, d.pxWidth)) // landscape capture
+      !d.manualOnly && // e.g. iPhone 18 — indistinguishable from the 17 by pixels
+      ((near(pxW, d.pxWidth) && near(pxH, d.pxHeight)) ||
+        (near(pxW, d.pxHeight) && near(pxH, d.pxWidth))) // landscape capture
   );
 }
 
