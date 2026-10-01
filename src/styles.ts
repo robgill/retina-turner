@@ -24,7 +24,7 @@ export const CORNER_RADII = { none: 0, clean: 17, mid: 22 };
 // Border defaults for a freshly-styled frame. Border is opt-in: width 0 means
 // no border until the user types one in.
 export const DEFAULT_STROKE_WIDTH = 0;
-export const DEFAULT_STROKE_COLOUR = "#2c2c2c";
+export const DEFAULT_STROKE_COLOUR = "#000000";
 
 // Drop-shadow presets (shadow only — border is independent now).
 //  - none   → no shadow

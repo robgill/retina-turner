@@ -53,7 +53,7 @@ const DEFAULT_COMPUTER: TabPrefs = {
   keepQuality: true,
   titleOn: false,
   font: "inter",
-  fontColour: "#6b7280",
+  fontColour: "#000000",
   cornerRadius: 17,
   radiusFromDevice: false,
   strokeWidth: DEFAULT_STROKE_WIDTH,
@@ -68,7 +68,7 @@ const DEFAULT_PHONE: TabPrefs = {
   keepQuality: true,
   titleOn: false,
   font: "inter",
-  fontColour: "#6b7280",
+  fontColour: "#000000",
   cornerRadius: 62, // fallback; the phone tab defaults to the device's own radius
   radiusFromDevice: true,
   strokeWidth: DEFAULT_STROKE_WIDTH,
