@@ -200,6 +200,9 @@ export type UIToMain =
       ids: string[];
       style: FrameStyle;
       statusBar: RestyleStatusBar[];
+      // The device chosen in the active tab now. Plain (non-image) frames adopt
+      // it — resizing + re-dropping the status bar; image frames ignore it.
+      deviceKey?: string;
     }
   | {
       // Apply device sizing + status bar + styling to plain selected frames.

@@ -495,7 +495,12 @@ async function turnItAll(items: ProcessedItem[], options: ProcessOptions) {
  * label, off → unwrap the stack) and reconcile the status bar too: on → add one
  * (using the freshly sampled colour from the UI), off → remove the existing
  * one. Pixel options (clip/resize) are untouched. */
-async function restyleAll(ids: string[], style: FrameStyle, statusBar: RestyleStatusBar[]) {
+async function restyleAll(
+  ids: string[],
+  style: FrameStyle,
+  statusBar: RestyleStatusBar[],
+  deviceKey?: string
+) {
   const sbById = new Map(statusBar.map((s) => [s.id, s]));
   let updated = 0;
   let sbSkipped = 0;
@@ -508,12 +513,24 @@ async function restyleAll(ids: string[], style: FrameStyle, statusBar: RestyleSt
     if (!node || node.removed || node.type !== "FRAME") continue;
     const stamp = readStamp(node);
     if (!stamp) continue;
+
+    // Plain (non-image) frames are the apply-to-frame kind: they adopt the
+    // device chosen now, resizing to it. Image screenshots keep their own
+    // device (changing it would need a pixel reprocess, which restyle can't do).
+    const isPlain = !imageHashOf(node);
+    const effDeviceKey = isPlain && deviceKey !== undefined ? deviceKey : stamp.deviceKey;
+    const device = deviceByKey(effDeviceKey);
+    if (isPlain) {
+      stamp.deviceKey = effDeviceKey;
+      if (device) node.resize(device.ptWidth, device.ptHeight);
+    }
+
     stamp.style.cornerRadius = style.cornerRadius;
     stamp.style.radiusFromDevice = style.radiusFromDevice;
     stamp.style.strokeWidth = style.strokeWidth;
     stamp.style.strokeColour = style.strokeColour;
     stamp.style.outline = style.outline;
-    applyStyle(node, stamp.style, deviceByKey(stamp.deviceKey));
+    applyStyle(node, stamp.style, device);
 
     // Title reconcile.
     let outermost: SceneNode = node;
@@ -542,13 +559,28 @@ async function restyleAll(ids: string[], style: FrameStyle, statusBar: RestyleSt
     updated++;
 
     const sb = sbById.get(id);
-    if (sb) {
+    if (isPlain) {
+      // Rebuild the bar every time so it always matches the current device: drop
+      // any existing one, then re-place for the chosen device. With no screenshot
+      // to sample, the colour/mode come from the frame's own background fill.
+      const existing = findStatusBar(node);
+      if (existing) existing.remove();
+      if (sb && sb.on && device && device.statusBarKind) {
+        const sample = sb.sample || frameStatusBarSample(node);
+        try {
+          await placeStatusBar(node, device, sample);
+        } catch (e) {
+          console.warn("Retina Turner: could not place status bar", e);
+          const detail = e instanceof Error ? e.message : String(e);
+          figma.notify(`Status bar failed: ${detail}`, { error: true });
+        }
+      }
+    } else if (sb) {
       const existing = findStatusBar(node);
       if (!sb.on) {
         if (existing) existing.remove();
       } else if (!existing) {
         // Add a bar only where we know the device and got a colour sample.
-        const device = deviceByKey(stamp.deviceKey);
         if (device && device.statusBarKind && sb.sample) {
           try {
             await placeStatusBar(node, device, sb.sample);
@@ -717,7 +749,7 @@ async function main() {
       }
     } else if (msg.type === "restyle") {
       try {
-        await restyleAll(msg.ids, msg.style, msg.statusBar || []);
+        await restyleAll(msg.ids, msg.style, msg.statusBar || [], msg.deviceKey);
         await pushSelection(); // refresh the UI's stored styles
       } catch (e) {
         console.error(e);

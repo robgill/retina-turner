@@ -824,21 +824,32 @@
       function restyleStyled() {
         if (!STATE.styled.length) return;
         var s = readStyle();
-        // Per-frame status bar intent: each stamped frame follows the toggle
-        // of the tab it was originally turned on. Adding needs a fresh
-        // colour sample from the frame's stored image bytes.
+        // The device chosen in the active tab now. Plain (non-image) frames
+        // adopt it on the main thread (resize + status bar); image frames keep
+        // their own. "" means auto-detect / no-resize.
+        var activeDeviceKey = STATE.tab === "computer"
+          ? ($("mac-device").value === NONE ? "" : $("mac-device").value)
+          : ($("phone-device").value === AUTO ? "" : $("phone-device").value);
+        var activeOn = STATE.tab === "computer"
+          ? $("statusbar-toggle-mac").checked
+          : $("statusbar-toggle").checked;
         var sbEntries = [], chain = Promise.resolve();
         STATE.styled.forEach(function (it) {
           chain = chain.then(function () {
+            // Plain frame (no image fill): follow the active tab's toggle; the
+            // main thread samples the bar colour from the frame's background.
+            if (!it.bytes) {
+              sbEntries.push({ id: it.id, on: activeOn, sample: null });
+              return;
+            }
+            // Image screenshot: follow the toggle of the tab it was turned on,
+            // sampling the bar colour from its stored pixels.
             var on = it.tab === "computer"
               ? $("statusbar-toggle-mac").checked
               : $("statusbar-toggle").checked;
             if (!on) { sbEntries.push({ id: it.id, on: false, sample: null }); return; }
             var device = deviceByKey(it.deviceKey);
-            if (!device || !it.bytes) {
-              sbEntries.push({ id: it.id, on: true, sample: null });
-              return;
-            }
+            if (!device) { sbEntries.push({ id: it.id, on: true, sample: null }); return; }
             return decode(it.bytes).then(function (bmp) {
               var sample = sampleStatusBar(bmp, 0, 0, bmp.width, bmp.height, device, it.tab === "computer");
               sbEntries.push({ id: it.id, on: true, sample: (sample && !sample.skip) ? sample : null });
@@ -851,7 +862,8 @@
           post({ type: "restyle",
                  ids: STATE.styled.map(function (x) { return x.id; }),
                  style: s,
-                 statusBar: sbEntries });
+                 statusBar: sbEntries,
+                 deviceKey: activeDeviceKey });
         });
       }
 
@@ -1079,6 +1091,9 @@
         var n = STATE.styled.length;
         updateTurnEnabled();
         if (n > 0) {
+          // Reflect the selected frame's actual style so re-turning is faithful
+          // (notably the title toggle — otherwise a stale checkbox would wrap the
+          // frame in an unexpected title stack).
           var st = STATE.styled[0].style;
           $("radius-input").value = (st.cornerRadius != null ? st.cornerRadius : 17);
           if (st.radiusFromDevice) setSel("radius-group", "device");
@@ -1086,6 +1101,11 @@
           $("stroke-width-input").value = (st.strokeWidth != null ? st.strokeWidth : 0);
           setColour("stroke", st.strokeColour || "#2c2c2c");
           setSel("outline-group", st.outline);
+          $("title-toggle").checked = !!st.titleOn;
+          if (st.font) $("font-select").value = st.font;
+          setColour("font", st.fontColour || "#000000");
+          setFontFace();
+          updateTitleStyleRow();
           refreshDeviceRadiusDisplay();
           updateShadowTint();
           updatePreview();
